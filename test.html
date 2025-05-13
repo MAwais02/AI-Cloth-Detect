@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0"></script>
+</head>
+<body>
+    <h1>Model Loading Test</h1>
+    <div id="status">Loading model...</div>
+
+    <script>
+        async function testModel() {
+            try {
+                const model = await tf.loadLayersModel('./model/model.json');
+                console.log('Model loaded successfully');
+                model.summary();
+                
+                // Test with dummy input
+                const dummyInput = tf.zeros([1, 28, 28, 1]);
+                const output = model.predict(dummyInput);
+                console.log('Test prediction shape:', output.shape);
+                
+                document.getElementById('status').textContent = 'Model loaded and tested successfully!';
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        testModel();
+    </script>
+</body>
+</html> 

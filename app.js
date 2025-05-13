@@ -23,12 +23,29 @@ const loadingOverlay = document.getElementById('loadingOverlay');
 
 // Load the model
 async function loadModel() {
+    showLoading(true);
     try {
+        // Load the model
         model = await tf.loadLayersModel(MODEL_PATH);
+        
+        // Verify the model's input shape
+        const inputShape = model.inputs[0].shape;
         console.log('Model loaded successfully');
+        console.log('Input shape:', inputShape);
+        
+        // Compile the model with the same configuration as training
+        model.compile({
+            optimizer: 'adam',
+            loss: 'categoricalCrossentropy',
+            metrics: ['accuracy']
+        });
+        
+        console.log('Model summary:', model.summary());
     } catch (error) {
         console.error('Error loading model:', error);
         alert('Error loading the model. Please try again later.');
+    } finally {
+        showLoading(false);
     }
 }
 
@@ -85,6 +102,8 @@ async function processImage(file) {
     showLoading(true);
     
     try {
+        console.log('Processing image:', file.name);
+        
         // Display preview
         const imageUrl = URL.createObjectURL(file);
         preview.src = imageUrl;
@@ -92,11 +111,20 @@ async function processImage(file) {
         uploadPrompt.classList.add('hidden');
 
         // Preprocess image
+        console.log('Loading image...');
         const image = await loadImage(file);
-        const tensor = preprocessImage(image);
+        console.log('Image loaded, preprocessing...');
+        const tensor = await preprocessImage(image);
+        console.log('Preprocessing complete. Tensor shape:', tensor.shape);
         
         // Make prediction
+        console.log('Making prediction...');
+        if (!model) {
+            console.error('Model not loaded properly');
+            throw new Error('Model not loaded properly');
+        }
         const predictions = await predict(tensor);
+        console.log('Predictions:', predictions);
         
         // Display results
         displayResults(predictions, imageUrl);
@@ -105,10 +133,11 @@ async function processImage(file) {
         updateHistory(predictions[0].className, predictions[0].probability, imageUrl);
         
         // Cleanup
-        tensor.dispose();
+        tf.dispose(tensor);
+        console.log('Processing complete');
     } catch (error) {
         console.error('Error processing image:', error);
-        alert('Error processing image. Please try again.');
+        alert('Error processing image: ' + error.message);
     } finally {
         showLoading(false);
     }
@@ -121,48 +150,76 @@ function loadImage(file) {
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => resolve(img);
-            img.onerror = reject;
+            img.onerror = (error) => {
+                console.error('Error loading image:', error);
+                reject(error);
+            };
             img.src = e.target.result;
         };
-        reader.onerror = reject;
+        reader.onerror = (error) => {
+            console.error('Error reading file:', error);
+            reject(error);
+        };
         reader.readAsDataURL(file);
     });
 }
 
 // Preprocess image for the model
-function preprocessImage(img) {
-    // Create a canvas to resize and convert to grayscale
-    const canvas = document.createElement('canvas');
-    canvas.width = IMAGE_SIZE;
-    canvas.height = IMAGE_SIZE;
-    const ctx = canvas.getContext('2d');
-    
-    // Resize and convert to grayscale
-    ctx.drawImage(img, 0, 0, IMAGE_SIZE, IMAGE_SIZE);
-    const imageData = ctx.getImageData(0, 0, IMAGE_SIZE, IMAGE_SIZE);
-    const data = imageData.data;
-    
-    // Convert to grayscale and normalize
-    const grayscale = new Float32Array(IMAGE_SIZE * IMAGE_SIZE);
-    for (let i = 0; i < data.length; i += 4) {
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        grayscale[i / 4] = avg / 255.0;
-    }
-    
-    // Reshape to match model input shape [1, 28, 28, 1]
-    return tf.tensor(grayscale).reshape([1, IMAGE_SIZE, IMAGE_SIZE, 1]);
+async function preprocessImage(img) {
+    return tf.tidy(() => {
+        // Log original image dimensions
+        console.log('Original image dimensions:', img.width, 'x', img.height);
+        
+        // Convert the image to grayscale tensor
+        let tensor = tf.browser.fromPixels(img, 1);
+        console.log('Initial tensor shape:', tensor.shape);
+        
+        // Resize to match Fashion MNIST dimensions
+        tensor = tf.image.resizeBilinear(tensor, [IMAGE_SIZE, IMAGE_SIZE]);
+        console.log('After resize shape:', tensor.shape);
+        
+        // Normalize to [0,1]
+        tensor = tensor.toFloat().div(255.0);
+        
+        // Reshape to match the model's expected input shape [batch_size, height, width, channels]
+        // The TFJS JSON model expects this exact format
+        tensor = tensor.reshape([1, IMAGE_SIZE, IMAGE_SIZE, 1]);
+        console.log('Final tensor shape:', tensor.shape);
+        
+        return tensor;
+    });
 }
 
 // Make prediction using the model
 async function predict(tensor) {
-    const predictions = await model.predict(tensor).data();
-    return Array.from(predictions)
-        .map((prob, i) => ({
-            className: FASHION_CLASSES[i],
-            probability: prob
-        }))
-        .sort((a, b) => b.probability - a.probability)
-        .slice(0, 3);
+    return tf.tidy(() => {
+        if (!model) {
+            throw new Error('Model not loaded');
+        }
+        
+        console.log('Prediction input tensor shape:', tensor.shape);
+        
+        // Get prediction
+        const predictions = model.predict(tensor);
+        console.log('Raw prediction shape:', predictions.shape);
+        
+        // Get probabilities
+        const probabilities = predictions.dataSync();
+        console.log('Raw probabilities:', probabilities);
+        
+        // Verify probabilities sum close to 1
+        const sum = probabilities.reduce((a, b) => a + b, 0);
+        console.log('Sum of probabilities:', sum);
+        
+        // Process results
+        return Array.from(probabilities)
+            .map((probability, index) => ({
+                className: FASHION_CLASSES[index],
+                probability: probability
+            }))
+            .sort((a, b) => b.probability - a.probability)
+            .slice(0, 3);
+    });
 }
 
 // Display prediction results
@@ -260,5 +317,29 @@ function showLoading(show) {
     loadingOverlay.style.display = show ? 'flex' : 'none';
 }
 
+// Add debug function to help troubleshoot model
+function debugModel() {
+    if (!model) {
+        console.error('Model not loaded');
+        return;
+    }
+    
+    console.log('Model architecture:', model.toJSON());
+    console.log('Input shape:', model.inputs[0].shape);
+    console.log('Output shape:', model.outputs[0].shape);
+    
+    // Create a sample tensor matching the input shape and run inference
+    const sampleTensor = tf.zeros([1, IMAGE_SIZE, IMAGE_SIZE, 1]);
+    try {
+        const result = model.predict(sampleTensor);
+        console.log('Sample inference result shape:', result.shape);
+        console.log('Sample inference result:', result.dataSync());
+    } catch (error) {
+        console.error('Error running sample inference:', error);
+    } finally {
+        tf.dispose(sampleTensor);
+    }
+}
+
 // Initialize the application
-init(); 
+window.onload = init;
