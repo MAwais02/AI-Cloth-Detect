@@ -1,0 +1,4 @@
+node_modules/
+venv/
+coder.py
+fashion_mnist_model.h5

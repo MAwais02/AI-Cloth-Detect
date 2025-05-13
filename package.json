@@ -1,0 +1,23 @@
+{
+  "name": "fashion-mnist-classifier",
+  "version": "1.0.0",
+  "description": "Fashion MNIST Image Classifier using TensorFlow.js",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve -s .",
+    "dev": "serve -s . -l 3000"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
+    "serve": "^14.2.1"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "fashion-mnist",
+    "tensorflow.js",
+    "machine-learning",
+    "image-classification"
+  ],
+  "author": "",
+  "license": "MIT"
+} 

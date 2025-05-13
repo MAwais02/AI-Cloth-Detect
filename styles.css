@@ -1,0 +1,47 @@
+.confidence-bar {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.confidence-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+    transition: width 0.3s ease;
+}
+
+.history-item {
+    transition: transform 0.2s ease;
+}
+
+.history-item:hover {
+    transform: translateY(-2px);
+}
+
+.share-button {
+    transition: all 0.2s ease;
+}
+
+.share-button:hover {
+    background-color: #2563eb;
+    transform: translateY(-1px);
+}
+
+.share-button:active {
+    transform: translateY(0);
+}
+
+#dropZone.drag-over {
+    border-color: #3b82f6;
+    background-color: #f0f9ff;
+}
+
+.image-controls {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.image-container:hover .image-controls {
+    opacity: 1;
+} 
